@@ -1,9 +1,13 @@
 set(SOTC_GENERATED_DIR "${CMAKE_CURRENT_SOURCE_DIR}/generated")
 
 if(NOT EXISTS "${SOTC_GENERATED_DIR}/register_functions.cpp" OR NOT EXISTS "${SOTC_GENERATED_DIR}/sotc_layout_generated.h")
-    message(FATAL_ERROR
-        "Recompiled game code not found in ${SOTC_GENERATED_DIR}.\n"
-        "Run Tools/generate.bat (or Tools/generate.py) with your own disc image first.")
+    # Not fatal: the recompiler (build.bat ps2_recomp) must be buildable from this
+    # same tree before the game code can be generated. Only the port targets are skipped.
+    message(WARNING
+        "Recompiled game code not found in ${SOTC_GENERATED_DIR}; the sotc target is not available.\n"
+        "Build the recompiler (build.bat ps2_recomp), run Tools/generate.bat with your own disc image, "
+        "then re-run configure.bat.")
+    return()
 endif()
 
 file(GLOB SOTC_GENERATED_SOURCES CONFIGURE_DEPENDS "${SOTC_GENERATED_DIR}/*.cpp")
@@ -41,7 +45,7 @@ else()
 add_library(sotc_game_code STATIC ${SOTC_GENERATED_SOURCES})
 target_include_directories(sotc_game_code PUBLIC "${SOTC_GENERATED_DIR}")
 target_link_libraries(sotc_game_code PUBLIC ps2_runtime)
-set_target_properties(sotc_game_code PROPERTIES UNITY_BUILD OFF)
+set_target_properties(sotc_game_code PROPERTIES UNITY_BUILD OFF JOB_POOL_COMPILE sotc_heavy_compile)
 target_precompile_headers(sotc_game_code PRIVATE
     "${CMAKE_SOURCE_DIR}/External/PS2Recomp/ps2xRuntime/include/ps2_runtime_macros.h"
     "${CMAKE_SOURCE_DIR}/External/PS2Recomp/ps2xRuntime/include/ps2_runtime.h"
@@ -50,6 +54,14 @@ target_precompile_headers(sotc_game_code PRIVATE
     "${CMAKE_SOURCE_DIR}/External/PS2Recomp/ps2xRuntime/include/ps2_syscalls.h"
     "${CMAKE_SOURCE_DIR}/External/PS2Recomp/ps2xRuntime/include/ps2_stubs.h"
 )
+# register_functions.cpp is one static constructor with ~111k table stores, run once at start-up.
+# Under /O2 + /d2OptimizeHugeFunctions MSVC spends well over an hour on it for no run-time benefit,
+# so it is compiled unoptimized. Skipping the PCH keeps its option set independent of the PCH's.
+if(MSVC)
+    set_source_files_properties("${SOTC_GENERATED_DIR}/register_functions.cpp" PROPERTIES
+        SKIP_PRECOMPILE_HEADERS ON
+        COMPILE_OPTIONS "/Od;/Ob0")
+endif()
 endif()
 
 add_executable(sotc ${SOTC_HOST_SOURCES})
@@ -64,6 +76,7 @@ endif()
 file(GLOB SOTC_VU1_SOURCES CONFIGURE_DEPENDS "${SOTC_GENERATED_DIR}/vu1/*.cpp")
 if(SOTC_VU1_SOURCES)
     add_library(sotc_vu1_code STATIC ${SOTC_VU1_SOURCES})
+    set_target_properties(sotc_vu1_code PROPERTIES JOB_POOL_COMPILE sotc_heavy_compile)
     target_include_directories(sotc_vu1_code PRIVATE "${CMAKE_SOURCE_DIR}/External/PS2Recomp/ps2xRuntime/src/lib/vu")
     target_link_libraries(sotc_vu1_code PUBLIC ps2_runtime)
     target_link_libraries(sotc PRIVATE sotc_vu1_code)
@@ -104,6 +117,7 @@ if(MSVC)
 endif()
 
 set_target_properties(sotc PROPERTIES
+    JOB_POOL_LINK sotc_heavy_link
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
     VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
 )
