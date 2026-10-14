@@ -35,6 +35,15 @@ def find_recompiler():
     sys.exit("ps2_recomp.exe not found. Run configure.bat, then: build.bat ps2_recomp")
 
 
+def find_vu1_recompiler():
+    path = os.path.join(ROOT, "build", "port", "External", "PS2Recomp", "ps2xTest", "vu1_recomp.exe")
+    if os.path.exists(path):
+        return path
+    sys.exit("vu1_recomp.exe not found. Run configure.bat, then: build.bat vu1_recomp\n"
+             "(without compiled VU1 programs the game runs its VU1 code in the interpreter at a few fps; "
+             "pass --no-vu1 to skip this step anyway)")
+
+
 def run(cmd, cwd=ROOT):
     print("+", " ".join(f'"{c}"' if " " in c else c for c in cmd), flush=True)
     r = subprocess.run(cmd, cwd=cwd)
@@ -42,9 +51,10 @@ def run(cmd, cwd=ROOT):
         sys.exit(r.returncode)
 
 
-def sync_tree(src, dst):
+def sync_tree(src, dst, what="generated sources"):
+    os.makedirs(dst, exist_ok=True)
     changed = removed = 0
-    wanted = set(os.listdir(src))
+    wanted = {name for name in os.listdir(src) if os.path.isfile(os.path.join(src, name))}
     for name in wanted:
         a = os.path.join(src, name)
         b = os.path.join(dst, name)
@@ -57,14 +67,16 @@ def sync_tree(src, dst):
         if name not in wanted and os.path.isfile(os.path.join(dst, name)):
             os.remove(os.path.join(dst, name))
             removed += 1
-    print(f"generated sources: {len(wanted)} total, {changed} written, {removed} removed")
+    print(f"{what}: {len(wanted)} total, {changed} written, {removed} removed")
 
 
 def main():
     ap = argparse.ArgumentParser(description="Regenerate the recompiled game code from your own disc image")
     ap.add_argument("--iso")
     ap.add_argument("--verify-ram", help="optional PCSX2 RAM dump to verify module relocation against")
+    ap.add_argument("--no-vu1", action="store_true", help="skip extracting and recompiling the VU1 microprograms")
     args = ap.parse_args()
+    vu1_recomp = None if args.no_vu1 else find_vu1_recompiler()
 
     iso = find_iso(args.iso)
     link_cmd = [sys.executable, os.path.join(ROOT, "Tools", "sotc_link.py"), "--profile", PROFILE, "--iso", iso,
@@ -90,6 +102,14 @@ def main():
     run([sys.executable, os.path.join(ROOT, "Tools", "verify_reloc_sites.py"),
          os.path.join(LINK_OUT, "sotc_runtime_relocs.csv"), GENERATED, os.path.join(LINK_OUT, "sotc_functions.csv")])
     shutil.copyfile(os.path.join(LINK_OUT, "sotc_address_map.csv"), os.path.join(ROOT, "Analysis", "ADDRESS_MAP.generated.csv"))
+
+    if vu1_recomp:
+        # VU1 microprograms: extracted statically from MANAGER's microcode table, compiled ahead of time.
+        programs = os.path.join(LINK_OUT, "vu1_programs")
+        run([sys.executable, os.path.join(ROOT, "Tools", "vu1_extract.py"), os.path.join(LINK_OUT, "sotc_linked.elf"), programs])
+        vu1_staging = os.path.join(staging, "vu1")
+        run([vu1_recomp, programs, vu1_staging])
+        sync_tree(vu1_staging, os.path.join(GENERATED, "vu1"), "generated VU1 sources")
     print("Generated code is up to date. Next: build.bat")
 
 
