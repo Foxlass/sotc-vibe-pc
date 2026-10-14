@@ -11,6 +11,7 @@
 #include "sotc/debug_script.h"
 #include "sotc/display_mode.h"
 #include "sotc/game_disc.h"
+#include "sotc/frame_pacing.h"
 #include "sotc/idle_thread.h"
 #include "sotc/log.h"
 #include "sotc/module_guard.h"
@@ -221,6 +222,17 @@ int main(int argc, char *argv[])
         PS2Runtime runtime;
         const char *maximizeWindow = std::getenv("SOTC_WINDOW_MAXIMIZED");
         ps2_host_display::setStartMaximized(!maximizeWindow || std::string_view(maximizeWindow) != "0");
+        {
+            // SOTC_FULLSCREEN_REFRESH: auto (the field rate: 59/60 Hz NTSC, 50 Hz PAL), a rate in Hz, or 0.
+            const char *refresh = std::getenv("SOTC_FULLSCREEN_REFRESH");
+            const std::string_view value = refresh ? refresh : "auto";
+            const char *videoMode = std::getenv("SOTC_VIDEO_MODE");
+            const bool pal = videoMode && std::string_view(videoMode) == "PAL";
+            if (value == "auto")
+                ps2_host_display::setFullscreenRefresh(pal ? 50 : 59, pal ? 0 : 60);
+            else if (value != "0" && value != "off")
+                ps2_host_display::setFullscreenRefresh(std::atoi(std::string(value).c_str()), 0);
+        }
         if (!runtime.initialize("Shadow of the Colossus"))
         {
             SOTC_ERROR(Boot, "runtime initialization failed");
@@ -259,6 +271,7 @@ int main(int argc, char *argv[])
         sotc::hle::installSceCdvd(runtime);
         sotc::hle::installLibgcc(runtime);
         sotc::installIdleThreadSkip(runtime);
+        sotc::installFramePacing(runtime);
         sotc::installDisplayMode(runtime);
         sotc::installMouseCamera(runtime);
         sotc::installMotionBlurOption(runtime);

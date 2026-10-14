@@ -17,6 +17,7 @@ set(SOTC_HOST_SOURCES
     src/sotc/config.cpp
     src/sotc/debug_script.cpp
     src/sotc/display_mode.cpp
+    src/sotc/frame_pacing.cpp
     src/sotc/function_hooks.cpp
     src/sotc/game_disc.cpp
     src/sotc/hle/sce_cdvd.cpp
