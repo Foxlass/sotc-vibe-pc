@@ -26,6 +26,7 @@
 
 #if SOTC_HAS_VU1_PROGRAMS
 void registerGeneratedVu1Programs();
+void registerSotcVu1NativeKernels();
 #endif
 
 #include <cstdlib>
@@ -277,6 +278,7 @@ int main(int argc, char *argv[])
         sotc::installMotionBlurOption(runtime);
 #if SOTC_HAS_VU1_PROGRAMS
         registerGeneratedVu1Programs();
+        registerSotcVu1NativeKernels();
 #endif
         sotc::installCallTracesFromEnvironment(runtime);
         sotc::installDebugScriptFromEnvironment(runtime);

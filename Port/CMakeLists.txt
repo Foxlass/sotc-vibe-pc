@@ -76,7 +76,8 @@ endif()
 
 file(GLOB SOTC_VU1_SOURCES CONFIGURE_DEPENDS "${SOTC_GENERATED_DIR}/vu1/*.cpp")
 if(SOTC_VU1_SOURCES)
-    add_library(sotc_vu1_code STATIC ${SOTC_VU1_SOURCES})
+    # Generated VU1 programs plus hand-written native kernels for their hottest routines.
+    add_library(sotc_vu1_code STATIC ${SOTC_VU1_SOURCES} src/vu1_native/sotc_vu1_native.cpp src/vu1_native/sotc_vu1_skin.cpp)
     set_target_properties(sotc_vu1_code PROPERTIES JOB_POOL_COMPILE sotc_heavy_compile)
     target_include_directories(sotc_vu1_code PRIVATE "${CMAKE_SOURCE_DIR}/External/PS2Recomp/ps2xRuntime/src/lib/vu")
     target_link_libraries(sotc_vu1_code PUBLIC ps2_runtime)
